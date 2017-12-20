@@ -5,12 +5,12 @@ from time import sleep  # To prevent overwhelming the server between connections
 import pandas as pd  # For converting results to a dataframe and bar chart plots
 import sqlite3
 from urllib2 import Request, urlopen
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import finance as f_url
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import information_technology as it_url
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import telecommunication as t_url
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import health_care as hc_url
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import insurance as in_url
-from JobRecommenderSystem.OfflineProcessors.JobListingUrls import more_items
+from JobRecommenderSystem.OfflineProcessors.JobListingUrls import finance
+from JobRecommenderSystem.OfflineProcessors.JobListingUrls import information_technology
+from JobRecommenderSystem.OfflineProcessors.JobListingUrls import telecommunication
+from JobRecommenderSystem.OfflineProcessors.JobListingUrls import health_care
+from JobRecommenderSystem.OfflineProcessors.JobListingUrls import insurance
+
 
 from JobRecommenderSystem.libs import DatabaseProvider as db
 
@@ -26,14 +26,14 @@ def __create_job_listings_table(create):
         connection = db.get_db();
         cursor = connection.cursor();
         __drop_table(cursor)
-        cursor.execute('CREATE TABLE job_listings(sector TEXT, company_name TEXT, location TEXT, url TEXT, job_description TEXT)')
+        cursor.execute('CREATE TABLE job_listings(sector TEXT, job_title TEXT, company_name TEXT, salary TEXT, location TEXT, url TEXT, job_description TEXT)')
         cursor.close()
         connection.close()
 
-def __insert_record(cursor, sector, company_name, location, url, description):
+def __insert_record(cursor, sector, job_title, company_name, salary, location, url, description):
     cursor.execute(
-        'INSERT OR REPLACE INTO job_listings (sector, company_name, location, url, job_description) VALUES(?, ?, ?, ?, ?)',
-        (sector, company_name, location, url, description))
+        'INSERT OR REPLACE INTO job_listings (sector, job_title, company_name, salary, location, url, job_description) VALUES(?, ?, ?, ?, ?, ?, ?)',
+        (sector, job_title, company_name, salary, location, url, description))
 
 def __get_JobView(soup):
     return soup.find("div", {"id" : "JobView"})
@@ -45,6 +45,18 @@ def __get_emp_name(soup):
     emp_name = soup.find("span", {"class" : "strong ib"})
     if emp_name:
         return emp_name.text.encode('ascii', 'ignore').strip()
+    return None
+
+def __get_job_title(soup):
+    job_title = soup.find("h2", {"class" : "noMargTop margBotXs strong"})
+    if job_title:
+         return job_title.text.encode('ascii', 'ignore')
+    return None
+
+def __get_salary_range(soup):
+    salary = soup.find("span", {"class" : "salEst green"})
+    if salary:
+        return salary.text.encode('ascii', 'ignore').split("(")[0]
     return None
 
 def __get_emp_location(soup):
@@ -75,22 +87,28 @@ def crawl_and_populate_db(base_url, url, header, sector):
         html = urllib2.urlopen(q).read()
         soup = BeautifulSoup(html, "html.parser")
         items = soup.findAll("ul", {"class": "jlGrid hover"})
-        job_URLS = [base_url + link.get('href') for link in items[0].findAll('a', href=True)]
+        job_URLS = set()
+        for link in items[0].findAll('a', href=True):
+            job_URLS.add(str(base_url + link.get('href')))
+        #job_URLS = [base_url + link.get('href') for link in items[0].findAll('a', href=True)]
         print "count of Job URLs %d" % len(job_URLS)
         for url in job_URLS:
-            time.sleep(2);
+            print url
+            time.sleep(1);
             q = Request(url)
             q.add_header("User-Agent", header)
             html = urllib2.urlopen(q).read()
             soup = BeautifulSoup(html, "html.parser")
             job_view_soup = __get_JobView(soup)
             emp_info_soup = __get_emp_info(job_view_soup)
+            job_title = __get_job_title(emp_info_soup)
             emp_name = __get_emp_name(emp_info_soup)
             loc = __get_emp_location(emp_info_soup)
+            salary = __get_salary_range(emp_info_soup)
             loc = __clean_location(loc)
             job_description = __get__JobDescription(job_view_soup)
             job_description = __clean_JobDescription(job_description)
-            __insert_record(cursor, sector, emp_name, loc, url, job_description)
+            __insert_record(cursor, sector, job_title, emp_name, salary, loc, url, job_description)
             connection.commit()
     except urllib2.HTTPError, e:
         print e.code
@@ -135,9 +153,20 @@ if __name__ == '__main__':
     #__create_job_listings_for_telecommunication()
     #__create_job_listings_for_health_care()
     #__create_job_listings_for_insurance()
-    url = "https://www.glassdoor.com/Job/jobs.htm?suggestCount=0&suggestChosen=false&clickSource=searchBtn&" \
-          "typedKeyword=Vmware&sc.keyword=Vmware&locT=C&locId=1147431&jobType="
-    crawl_and_populate_db(base_url, url, headers, "Information Technology")
+    sales_force = [
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP2.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP3.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP4.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP5.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP6.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP7.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP8.htm",
+    "https://www.glassdoor.com/Job/california-google-jobs-SRCH_IL.0,10_IS2280_KE11,17_IP9.htm"
+    ]
+
+    for url in insurance:
+        crawl_and_populate_db(base_url, url, headers, "Insurance")
 
 
 
