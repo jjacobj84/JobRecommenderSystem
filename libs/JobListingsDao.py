@@ -1,5 +1,5 @@
 
-from JobRecommenderSystem.libs import DatabaseProvider as db
+import DatabaseProvider as db
 
 class JobListingsDao:
     connection = None

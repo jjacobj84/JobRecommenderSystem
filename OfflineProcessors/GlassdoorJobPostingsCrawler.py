@@ -2,7 +2,6 @@ from bs4 import BeautifulSoup, SoupStrainer  # For HTML parsing
 import urllib2  # Website connections
 import re  # Regular expressions
 from time import sleep  # To prevent overwhelming the server between connections
-import pandas as pd  # For converting results to a dataframe and bar chart plots
 import sqlite3
 from urllib2 import Request, urlopen
 from JobRecommenderSystem.OfflineProcessors.JobListingUrls import finance
